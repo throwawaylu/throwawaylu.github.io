@@ -153,6 +153,9 @@
 				}
 				table.appendTo(container);
 				
+				var heightLeft = $("body").outerHeight() - container.outerHeight();
+				$(".control_container, #allocation_container").css("height", heightLeft + "px");
+				
 				totalMemory = id;
 				
 				memo = new Array(id);
