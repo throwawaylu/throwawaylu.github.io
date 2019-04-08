@@ -1,28 +1,369 @@
-<!DOCTYPE html>
-<html>
+<html lang="en">
 	<head>
-		<title>Hank Quinlan, Horrible Cop</title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<style>
+			#grid_container {
+				width: 100%;
+				height: 50%;
+			}
+			
+			#grid_container table {
+				border-collapse: collapse;
+			}
+			
+			#grid_container td {
+				width: 10px;
+				height: 10px;
+				border: solid 1px black;
+				padding: 0;
+				margin: 0;
+			}
+			
+			#grid_container td.black {
+				background-color: yellow !important;
+			}
+			
+			.control_container, #allocation_container {
+				width: 50%;
+				height: 50%;
+				overflow: auto;
+			}
+			
+			.control_container {
+				float: left;
+			}
+			
+			.control_container div {
+				text-align: center;
+				font-size: 20px;
+			}
+			
+			.control_container .info {
+				display: inline-block;
+				padding: 4px 0 4px 0;
+				width: 33%;
+			}
+			
+			.control_container input {
+				width: 70px;
+			}
+			
+			.control_container .control {
+				margin-top: 30px;
+			}
+			
+			#allocation_container {
+				float: right;
+			}
+			
+			#allocation_container div {
+				padding: 4px;
+				font-size: 18px;
+				text-align: center;
+			}
+			#allocation_container div span {
+				display: inline-block;
+				min-width: 60px;
+			}
+			#allocation_container div:hover {
+				background-color: yellow;
+			}
+		</style>
 	</head>
 	<body>
-		<nav>
-    		<ul>
-        		<li><a href="/">Home</a></li>
-	        	<li><a href="/about">About</a></li>
-        		<li><a href="/cv">CV</a></li>
-        		<li><a href="/blog">Blog</a></li>
-    		</ul>
-		</nav>
-		<div class="container">
-    		<div class="blurb">
-        		<h1>Hi there, I'm Hank Quinlan!</h1>
-				<p>I'm best known as the horrible cop from <em>A Touch of Evil</em> Don't trust me. <a href="/about">Read more about my life...</a></p>
-    		</div><!-- /.blurb -->
-		</div><!-- /.container -->
-		<footer>
-    		<ul>
-        		<li><a href="mailto:hankquinlanhub@gmail.com">email</a></li>
-        		<li><a href="https://github.com/hankquinlan">github.com/hankquinlan</a></li>
-			</ul>
-		</footer>
+		<div id="grid_container"></div>
+		
+		<div class="control_container">
+			<div class="info">Total memory: <span id="total_memory" /></div>
+			<div class="info">Used memory: <span id="used_memory" /></div>
+			<div class="info">Free memory: <span id="free_memory" /></div>
+			<div class="info">Allocations alive: <span id="allocas_alive" /></div>
+			<div class="info">Successful allocations: <span id="successful_allocas" /></div>
+			<div class="info">Failed allocations: <span id="failed_allocas" /></div>
+			<div class="info">Total memory allocated: <span id="total_size" /></div>
+			<div class="info" style="width: 60%">Maximum allocation size currently available: <span id="max_size" /></div>
+			<div class="control">
+				Memory allocation algorithm:
+				<select onchange="changeAlgo(this.value)">
+					<option value="first" selected>First fit</option>
+					<option value="best">Best fit</option>
+					<option value="worst">Worst fit</option>
+				</select>
+			</div>
+			<div class="control">
+				New allocations, size:
+				<input type="number" id="alloca_size" min="1" />
+				count:
+				<input type="number" id="new_alloca_count" value="1" min="1" />
+				<button onclick="addAllocas()">allocate</button>
+			</div>
+			<div class="control">
+				New random sized allocations, random iterations:
+				<input type="number" id="random_iter" value="5" min="1" max="100" />
+				count:
+				<input type="number" id="random_count" value="1" min="1" />
+				<button onclick="randomAllocas()">allocate</button>
+			</div>
+			<div class="control">
+				Free random allocations, count:
+				<input type="number" id="free_count" value="1" min="1" />
+				<button onclick="freeRandom()">free</button>
+			</div>
+		</div>
+		
+		<div id="allocation_container">
+		</div>
+		
+		<script type="text/javascript">
+			const CELL_SIZE = 10, BORDER_SIZE = 1;
+			const algos = {
+				"first": firstFitAlgo,
+				"best": bestFitAlgo,
+				"worst": worstFitAlgo
+			};
+			
+			var rows, cols;
+			var totalMemory = 0, usedMemory = 0, freeMemory = 0, maxAlloca = 0;
+			var allocasAlive = 0, successfulAllocas = 0, failedAllocas = 0, totalSize = 0;
+			var memo, allocas = [];
+			var algo = "first";
+			
+			createTable();
+			updateInfos();
+			
+			function createTable() {
+				var container = $("#grid_container");
+				var width = container.width();
+				var height = container.height();
+				rows = Math.floor((height - BORDER_SIZE) / CELL_SIZE);
+				cols = Math.floor((width - BORDER_SIZE) / (CELL_SIZE + BORDER_SIZE));
+				
+				var table = $("<table>");
+				var id = 0;
+				for (var r = 0; r < rows; r++) {
+					var row = $("<tr>");
+					for (var c = 0; c < cols; c++, id++) {
+						var cell = $("<td>");
+						cell.attr("id", "m" + id);
+						cell.appendTo(row);
+					}
+					row.appendTo(table);
+				}
+				table.appendTo(container);
+				
+				totalMemory = id;
+				
+				memo = new Array(id);
+				for (var i = 0; i < id; i++) memo[i] = -1;
+			}
+			
+			function changeAlgo(value) { algo = value; }
+			
+			function addAlloca(size) {
+				if (size > maxAlloca) {
+					failedAllocas++;
+					updateInfos();
+					return;
+				}
+				
+				var start = algos[algo](size);
+				
+				var id = allocas.length, color;
+				
+				var colors = {
+					red: 0, green: 0, blue: 0, fuchsia: 0, aqua: 0, olive: 0, purple: 0, teal: 0, maroon: 0, lime: 0, navy: 0, orange: 0
+				};
+				
+				function addNeighbor(id) {
+					if (id < 0 || id >= totalMemory) return;
+					if (memo[id] == -1) return;
+					colors[allocas[memo[id]].color]++;
+				}
+				
+				addNeighbor(start - 1);
+				addNeighbor(start + size);
+				for (var t = 0; t < cols && t < size; t++) {
+					addNeighbor(start + t - cols);
+					addNeighbor(start + size - 1 - t + cols);
+				}
+				
+				var color = "red";
+				for (var c in colors) {
+					if (colors[c] < colors[color]) color = c;
+				}
+				
+				var div = $("<div>");
+				div.append("Start address: <span>" + start + "</span>");
+				div.append("End address: <span>" + (start + size) + "</span>");
+				div.append("Size: <span>" + size + "</span>");
+				div.append('<button onclick="freeAlloca(' + id + ')">free</button>');
+				div.hover(function() {
+					for (var i = 0; i < size; i++) {
+						$("#m" + (start + i)).addClass("black");
+					}
+				}, function() {
+					for (var i = 0; i < size; i++) {
+						$("#m" + (start + i)).removeClass("black");
+					}
+				});
+				div.appendTo("#allocation_container");
+				
+				allocas.push({
+					start: start,
+					size: size,
+					id: id,
+					color: color,
+					div: div
+				});
+				
+				for (var i = 0; i < size; i++) {
+					memo[start + i] = id;
+					$("#m" + (start + i)).css("background-color", color);
+				}
+				
+				successfulAllocas++;
+				allocasAlive++;
+				totalSize += size;
+				
+				updateInfos();
+			}
+			
+			function addAllocas() {
+				var size = parseInt($("#alloca_size").val());
+				var cnt = parseInt($("#new_alloca_count").val());
+				var failedBefore = failedAllocas;
+				for (var i = 0; i < cnt; i++) addAlloca(size);
+				if (failedAllocas > failedBefore) {
+					alert("Error: " + (failedAllocas - failedBefore) + " allocations failed!");
+				}
+			}
+			
+			function randomAllocas() {
+				var iters = parseInt($("#random_iter").val());
+				var cnt = parseInt($("#random_count").val());
+				var failedBefore = failedAllocas;
+				for (var j = 0; j < cnt; j++) {
+					var size = totalMemory;
+					for (var i = 0; i < iters; i++) {
+						size = Math.floor(Math.random() * size) + 1;
+					}
+					addAlloca(size);
+				}
+				
+				if (failedAllocas > failedBefore) {
+					alert("Error: " + (failedAllocas - failedBefore) + " allocations failed!");
+				}
+			}
+			
+			function getRandomAlloca() {
+				var ids = [];
+				for (var i = 0; i < allocas.length; i++) {
+					if (allocas[i] != undefined) {
+						ids.push(i);
+					}
+				}
+				
+				if (ids.length == 0) return -1;
+				return ids[Math.floor(Math.random() * ids.length)];
+			}
+			
+			function freeRandom() {
+				var cnt = parseInt($("#free_count").val());
+				for (var i = 0; i < cnt && allocasAlive > 0; i++) {
+					freeAlloca(getRandomAlloca());
+				}
+			}
+			
+			function freeAlloca(id) {
+				if (allocas[id] == undefined) return;
+				
+				for (var i = 0; i < allocas[id].size; i++) {
+					memo[allocas[id].start + i] = -1;
+					var cell = $("#m" + (allocas[id].start + i));
+					cell.css("background-color", "");
+					cell.removeClass("black");
+				}
+				
+				allocas[id].div.remove();
+				allocas[id] = undefined;
+				allocasAlive--;
+				
+				updateInfos();
+			}
+			
+			function updateInfos() {
+				maxAlloca = freeMemory = usedMemory = 0;
+				for (var i = 0, s = 0; i < totalMemory; i++) {
+					if (memo[i] == -1) {
+						freeMemory++;
+						s++;
+						maxAlloca = Math.max(maxAlloca, s);
+					}
+					else {
+						usedMemory++;
+						s = 0;
+					}
+				}
+				
+				$("#total_memory").html(totalMemory);
+				$("#used_memory").html(usedMemory);
+				$("#free_memory").html(freeMemory);
+				$("#max_size").html(maxAlloca);
+				$("#total_size").html(totalSize);
+				$("#allocas_alive").html(allocasAlive);
+				$("#successful_allocas").html(successfulAllocas);
+				$("#failed_allocas").html(failedAllocas);
+			}
+			
+			function getHoles() {
+				var holes = [];
+				for (var i = 0, s = 0; i <= totalMemory; i++) {
+					if (i == totalMemory || memo[i] != -1) {
+						if (s > 0) {
+							holes.push({start: i - s, size: s});
+						}
+						s = 0;
+					}
+					else s++;
+				}
+				
+				return holes;
+			}
+			
+			function firstFitAlgo(size) {
+				var holes = getHoles();
+				for (var i = 0; i < holes.length; i++) {
+					if (holes[i].size >= size) {
+						return holes[i].start;
+					}
+				}
+				
+				return -1;
+			}
+			
+			function bestFitAlgo(size) {
+				var holes = getHoles(), bestStart = -1, bestSize = totalMemory + 1;
+				for (var i = 0; i < holes.length; i++) {
+					if (holes[i].size >= size && holes[i].size < bestSize) {
+						bestStart = holes[i].start;
+						bestSize = holes[i].size;
+					}
+				}
+				
+				return bestStart;
+			}
+			
+			function worstFitAlgo(size) {
+				var holes = getHoles(), worstStart = -1, worstSize = 0;
+				for (var i = 0; i < holes.length; i++) {
+					if (holes[i].size >= size && holes[i].size > worstSize) {
+						worstStart = holes[i].start;
+						worstSize = holes[i].size;
+					}
+				}
+				
+				return worstStart;
+			}
+		</script>
 	</body>
 </html>
