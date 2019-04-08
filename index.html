@@ -154,6 +154,7 @@
 				table.appendTo(container);
 				
 				var heightLeft = $("body").outerHeight() - table.outerHeight();
+				$("#grid_container").css("height", table.outerHeight() + "px");
 				$(".control_container, #allocation_container").css("height", heightLeft + "px");
 				
 				totalMemory = id;
