@@ -88,6 +88,7 @@
 					<option value="first" selected>First fit</option>
 					<option value="best">Best fit</option>
 					<option value="worst">Worst fit</option>
+					<option value="buddy">Buddy</option>
 				</select>
 			</div>
 			<div class="control">
@@ -119,7 +120,8 @@
 			const algos = {
 				"first": firstFitAlgo,
 				"best": bestFitAlgo,
-				"worst": worstFitAlgo
+				"worst": worstFitAlgo,
+				"buddy": buddyAlgo
 			};
 			
 			var rows, cols;
@@ -157,7 +159,10 @@
 				for (var i = 0; i < id; i++) memo[i] = -1;
 			}
 			
-			function changeAlgo(value) { algo = value; }
+			function changeAlgo(value) {
+				algo = value;
+				updateInfos();
+			}
 			
 			function addAlloca(size) {
 				if (size > maxAlloca) {
@@ -305,6 +310,12 @@
 					}
 				}
 				
+				if (algo == "buddy") {
+					while (maxAlloca > 0 && buddyAlgo(maxAlloca) == -1) {
+						maxAlloca--;
+					}
+				}
+
 				$("#total_memory").html(totalMemory);
 				$("#used_memory").html(usedMemory);
 				$("#free_memory").html(freeMemory);
@@ -354,6 +365,7 @@
 			}
 			
 			function worstFitAlgo(size) {
+				//alert('lols');
 				var holes = getHoles(), worstStart = -1, worstSize = 0;
 				for (var i = 0; i < holes.length; i++) {
 					if (holes[i].size >= size && holes[i].size > worstSize) {
@@ -363,6 +375,56 @@
 				}
 				
 				return worstStart;
+			}
+
+			function buddyAlgo(size) {
+				var holes = getHoles(), buddyStart = -1, buddySize = 1;
+
+				// atrod divnieka pakāpi
+				while (buddySize < size) {
+					buddySize = buddySize * 2;
+				}
+
+				
+				var biggerSize = buddySize;
+
+				while (buddyStart < 0) {
+					
+					biggerSize = biggerSize * 2;
+
+					for (var i = 0; i <= totalMemory && buddyStart < 0; i+=biggerSize) {
+
+						var brivs1 = true;
+						var brivs2 = true;
+
+						// ja otrs beidzas ārpus robežām, to automātiski uzskatām par aizņemtu
+						if (i + biggerSize > totalMemory) {
+							brivs2 = false;	
+							//alert(i);
+						}
+
+
+						// pārbaudām, kas ir un kas nav brīvs
+						for(var j = 0; j < biggerSize / 2; j++) {
+							brivs1 = brivs1 && (memo[i+j] == -1);
+							brivs2 = brivs2 && (memo[i+biggerSize/2+j] == -1);
+						}
+
+						if (brivs1 && !brivs2) {
+							buddyStart = i;
+						}
+						else if (!brivs1 && brivs2) {
+							buddyStart = i + biggerSize / 2;
+						}
+					}
+					if ( biggerSize > totalMemory) {
+						break;
+					}
+
+				}
+
+				//alert(memo);
+				return buddyStart;
 			}
 		</script>
 	</body>
