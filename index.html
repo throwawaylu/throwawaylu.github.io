@@ -368,7 +368,6 @@
 			}
 			
 			function worstFitAlgo(size) {
-				//alert('lols');
 				var holes = getHoles(), worstStart = -1, worstSize = 0;
 				for (var i = 0; i < holes.length; i++) {
 					if (holes[i].size >= size && holes[i].size > worstSize) {
@@ -403,7 +402,6 @@
 						// ja otrs beidzas ārpus robežām, to automātiski uzskatām par aizņemtu
 						if (i + biggerSize > totalMemory) {
 							brivs2 = false;	
-							//alert(i);
 						}
 
 
@@ -426,7 +424,6 @@
 
 				}
 
-				//alert(memo);
 				return buddyStart;
 			}
 		</script>
